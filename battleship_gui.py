@@ -1,126 +1,125 @@
 # -*- coding: utf-8 -*-
 """
 ====================================================
-  BATALLA NAVAL - VERSIÓN GRÁFICA CON PYGAME
-  Librería requerida: pip install pygame-ce
+  BATALLA NAVAL - VERSIÓN GRÁFICA CON PIXEL ART
+  Librería: pip install pygame-ce
   Python 3.x
 
   Controles:
-    - Click izquierdo  → Colocar barco / Disparar
-    - Click derecho    → Rotar barco (al colocarlo)
-    - Tecla R          → Rotar barco (al colocarlo)
-    - ESC              → Salir
+    - Click izquierdo  -> Colocar barco / Disparar
+    - Click derecho    -> Rotar barco (al colocarlo)
+    - Tecla R          -> Rotar barco (al colocarlo)
+    - ESC              -> Salir
 
   Conceptos de POO:
     - Clases y Objetos
-    - Herencia  (JugadorIA hereda de la lógica de Jugador)
+    - Herencia (JugadorIA)
     - Encapsulamiento (métodos privados con _)
-    - Composición (BatallaNavalGUI contiene Tablero y JugadorIA)
+    - Composición (BatallaNavalGUI contiene Tablero, IA, SpriteManager)
 ====================================================
 """
 
-import pygame   # Librería para gráficos, eventos y ventana
-import sys      # Para cerrar el programa correctamente
-import random   # Para posiciones y disparos aleatorios de la IA
-import math     # Para cálculos matemáticos en animaciones
+import pygame   # Librería para gráficos y ventana
+import sys      # Para cerrar el programa
+import random   # Para la IA y colocación aleatoria
+import math     # Para animaciones con seno/coseno
+import os       # Para rutas de archivos
+try:
+    import cv2      # Para reproducir el video
+    import numpy as np
+    CV2_OK = True
+except ImportError:
+    CV2_OK = False
 
-# ─────────────────────────────────────────────────────
-#  INICIALIZACIÓN DE PYGAME
-#  Siempre se debe llamar pygame.init() antes de usar
-#  cualquier función de la librería.
-# ─────────────────────────────────────────────────────
+# ─── Inicialización de Pygame ───
 pygame.init()
 
 # ── Dimensiones de la ventana ──
 ANCHO = 1200
 ALTO  = 720
-
-# ── Tamaño en píxeles de cada celda del tablero ──
-CELDA = 44
+CELDA = 44       # Tamaño en píxeles de cada celda
 FILAS = 10
 COLS  = 10
+FPS   = 60       # Fotogramas por segundo
 
-# ── Cuántos fotogramas por segundo (velocidad del juego) ──
-FPS = 60
+# ── Pixel Art ──
+PPU = 11         # Píxeles artísticos por celda (resolución baja)
+#                  Al escalar 4x (44/11) se crea el efecto pixel art
 
-# ── Posición de inicio de cada tablero en pantalla ──
-POS_JUG = (52, 160)    # Tablero del jugador (izquierda)
-POS_ENE = (645, 160)   # Tablero del enemigo (derecha)
-
-# ─────────────────────────────────────────────────────
-#  PALETA DE COLORES (formato RGB: rojo, verde, azul)
-#  Cada valor va de 0 a 255
-# ─────────────────────────────────────────────────────
-FONDO      = (8,   15,  40)    # Fondo oscuro de la pantalla
-PANEL      = (12,  28,  68)    # Panel lateral
-AGUA       = (18,  58, 138)    # Color de celdas vacías
-AGUA_H     = (38, 108, 218)    # Agua con hover (mouse encima)
-BARCO_OK   = (38, 172,  88)    # Barco colocado correctamente (verde)
-BARCO_H    = (58, 215, 118)    # Preview válido de barco
-BARCO_MAL  = (205,  55,  55)   # Preview inválido (rojo)
-IMPACTO    = (228,  58,  48)   # Celda con impacto (X)
-FALLO_C    = (72,  132, 198)   # Celda con disparo fallido
-BORDE      = (28,  68, 158)    # Borde de celdas
-BORDE_H    = (78, 158, 255)    # Borde activo/hover
-TEXTO      = (205, 228, 255)   # Color de texto general
-TITULO_C   = (92,  195, 255)   # Color de títulos
-ACENTO     = (255, 202,  48)   # Color de acento (amarillo dorado)
-BLANCO     = (255, 255, 255)
-GRIS       = (112, 125, 152)   # Texto secundario
-VERDE      = (45,  198, 102)   # Mensajes de éxito
-ROJO_C     = (222,  48,  48)   # Mensajes de error/peligro
-BTN        = (22,  58, 138)    # Botón normal
-BTN_H      = (48, 108, 218)    # Botón con hover
-BTN_T      = (195, 225, 255)   # Texto del botón
-NEGRO      = (0,     0,   0)
+# ── Posiciones de tableros en pantalla ──
+POS_JUG = (52, 160)     # Tablero del jugador (izquierda)
+POS_ENE = (645, 160)    # Tablero del enemigo (derecha)
+POS_COL = (380, 130)    # Tablero centrado en fase de colocación
 
 # ─────────────────────────────────────────────────────
-#  CONSTANTES DE ESTADO DEL JUEGO
-#  El juego tiene 4 pantallas/estados diferentes
+#  PALETA DE COLORES (RGB)
 # ─────────────────────────────────────────────────────
-MENU    = 'menu'      # Pantalla de bienvenida
-COLOCAR = 'colocar'  # Fase de colocación de barcos
-JUGAR   = 'jugar'    # Fase de batalla
-FIN     = 'fin'      # Pantalla de fin de juego
+FONDO     = (8,   15,  40)
+AGUA      = (18,  58, 138)
+IMPACTO   = (228,  58,  48)
+FALLO_C   = (72, 132, 198)
+BORDE     = (28,  68, 158)
+BORDE_H   = (78, 158, 255)
+TEXTO     = (205, 228, 255)
+TITULO_C  = (92, 195, 255)
+ACENTO    = (255, 202,  48)
+BLANCO    = (255, 255, 255)
+GRIS      = (112, 125, 152)
+VERDE     = (45, 198, 102)
+ROJO_C    = (222,  48,  48)
+BTN       = (22,  58, 138)
+BTN_H     = (48, 108, 218)
+BTN_T     = (195, 225, 255)
+PANEL_C   = (12,  28,  68)
+
+# ── Colores pixel art de los barcos ──
+C_CASCO    = (58, 68, 85)       # Borde del casco
+C_CUBIERTA = (78, 90, 110)      # Relleno de cubierta
+C_TORRETA  = (48, 55, 70)       # Torretas de cañón
+C_PUENTE   = (52, 60, 78)       # Puente de mando
+C_DETALLE  = (95, 108, 128)     # Detalles claros
+C_VENTANA  = (140, 180, 240)    # Ventanas / luces
+C_PISTA    = (92, 102, 118)     # Pista del portaaviones
+
+# ── Colores de efectos ──
+C_FUEGO1 = (255, 160, 20)       # Fuego naranja
+C_FUEGO2 = (255, 80,  20)       # Fuego rojo
+
+# ── Estados del juego ──
+MENU    = 'menu'
+COLOCAR = 'colocar'
+JUGAR   = 'jugar'
+FIN     = 'fin'
+VIDEO   = 'video'
+
+# ── Ruta del video de victoria ──
+VIDEO_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                           'quiero_que_el_video_sea_el_per.mp4')
+
+# ── Información de barcos (nombre, tamaño) ──
+BARCOS_INFO = [
+    ('Portaaviones', 5),
+    ('Acorazado',    4),
+    ('Crucero',      3),
+    ('Submarino',    3),
+    ('Destructor',   2),
+]
 
 
 # ============================================================
 # CLASE: Barco
-# Representa un barco del tablero
 # ============================================================
 class Barco:
-    """
-    Clase que modela un barco del juego.
-
-    Atributos:
-        nombre   : Nombre del barco (ej. "Portaaviones")
-        tamano   : Cuántas celdas ocupa
-        impactos : Cuántos impactos ha recibido
-        hundido  : True si ya fue hundido
-    """
+    """Representa un barco con nombre, tamaño e impactos recibidos."""
 
     def __init__(self, nombre, tamano):
-        """
-        Constructor: se llama al crear un nuevo Barco.
-
-        Parámetros:
-            nombre : str  → Nombre del barco
-            tamano : int  → Número de celdas que ocupa
-        """
         self.nombre   = nombre
         self.tamano   = tamano
-        self.impactos = 0       # Empieza sin impactos
-        self.hundido  = False   # Al inicio no está hundido
+        self.impactos = 0
+        self.hundido  = False
 
     def recibir_impacto(self):
-        """
-        Registra un impacto en el barco.
-        Si los impactos alcanzan el tamaño, el barco se hunde.
-
-        Retorna:
-            True  si el barco se hundió con este impacto
-            False si sigue a flote
-        """
+        """Registra un impacto. Retorna True si el barco se hundió."""
         self.impactos += 1
         if self.impactos >= self.tamano:
             self.hundido = True
@@ -128,315 +127,541 @@ class Barco:
         return False
 
     def __str__(self):
-        """Representación en texto del barco."""
-        return f"{self.nombre} ({self.tamano} celdas)"
+        return f"{self.nombre} ({self.tamano})"
 
 
 # ============================================================
 # CLASE: Tablero
-# Cuadrícula 10x10 con lógica del juego
+# Cuadrícula 10x10 con rastreo de barcos por celda
 # ============================================================
 class Tablero:
     """
-    Tablero de juego de 10x10 celdas.
-
-    Cada celda puede estar en uno de estos estados:
-        'agua'    → Celda vacía
-        'barco'   → Ocupada por un barco
-        'impacto' → Barco golpeado
-        'fallo'   → Disparo al agua
+    Tablero de 10x10 que sabe qué barco hay en cada celda.
+    self.mapa[f][c] = (índice_barco, índice_segmento, es_horizontal) o None
     """
 
     def __init__(self):
-        """Constructor: crea una cuadrícula vacía de 10x10."""
-        # Lista de listas (matriz 2D): 10 filas, cada una con 10 celdas 'agua'
         self.celdas   = [['agua'] * COLS for _ in range(FILAS)]
-
-        # Lista de diccionarios: {'barco': Barco, 'casillas': [(f,c), ...]}
-        self.barcos   = []
-
-        # Conjunto de coordenadas ya disparadas (evita repetir)
-        self.disparos = set()
+        self.barcos   = []          # Lista de {'barco', 'casillas', 'dir_h'}
+        self.disparos = set()       # Coordenadas ya disparadas
+        self.mapa     = [[None] * COLS for _ in range(FILAS)]
 
     def _calcular_casillas(self, fila, col, tamano, dir_h):
-        """
-        Calcula las celdas que ocuparía un barco.
-
-        Parámetros:
-            fila, col : Celda inicial
-            tamano    : Tamaño del barco
-            dir_h     : True=Horizontal, False=Vertical
-
-        Retorna:
-            Lista de tuplas (fila, col) o None si sale del tablero
-        """
+        """Calcula qué celdas ocuparía un barco. Retorna None si se sale."""
         casillas = []
         for i in range(tamano):
-            f = fila + (0 if dir_h else i)  # Si es vertical, incrementa fila
-            c = col  + (i if dir_h else 0)  # Si es horizontal, incrementa columna
-
-            # Verificamos que la celda esté dentro del tablero
+            f = fila + (0 if dir_h else i)
+            c = col  + (i if dir_h else 0)
             if not (0 <= f < FILAS and 0 <= c < COLS):
-                return None  # Fuera del tablero
+                return None
             casillas.append((f, c))
         return casillas
 
     def puede_colocar(self, fila, col, tamano, dir_h):
-        """
-        Verifica si se puede colocar un barco sin solapar ni salirse.
-
-        Retorna:
-            True  si es una posición válida
-            False si no se puede colocar
-        """
+        """Verifica si se puede colocar sin solaparse ni salirse."""
         casillas = self._calcular_casillas(fila, col, tamano, dir_h)
         if casillas is None:
-            return False  # Sale del tablero
-
-        for f, c in casillas:
-            if self.celdas[f][c] != 'agua':
-                return False  # Ya hay algo en esa celda
-        return True
+            return False
+        return all(self.celdas[f][c] == 'agua' for f, c in casillas)
 
     def colocar(self, barco, fila, col, dir_h):
-        """
-        Coloca el barco en el tablero.
-
-        Retorna:
-            True  si se colocó correctamente
-            False si hubo un error
-        """
+        """Coloca un barco y registra su posición en el mapa."""
         casillas = self._calcular_casillas(fila, col, barco.tamano, dir_h)
         if casillas is None:
             return False
-
         for f, c in casillas:
             if self.celdas[f][c] != 'agua':
                 return False
 
-        # Marcamos todas las celdas del barco
-        for f, c in casillas:
+        idx = len(self.barcos)
+        for i, (f, c) in enumerate(casillas):
             self.celdas[f][c] = 'barco'
+            self.mapa[f][c] = (idx, i, dir_h)
 
-        # Guardamos el barco y sus casillas para registrar impactos
-        self.barcos.append({'barco': barco, 'casillas': casillas})
+        self.barcos.append({'barco': barco, 'casillas': casillas, 'dir_h': dir_h})
         return True
 
     def disparar(self, fila, col):
-        """
-        Procesa un disparo en la celda indicada.
-
-        Retorna:
-            Diccionario con:
-              'resultado' : 'agua', 'impacto', 'hundido' o 'repetido'
-              'barco'     : Objeto Barco si hubo impacto (o None)
-        """
+        """Procesa un disparo. Retorna resultado con info del barco."""
         coord = (fila, col)
-
         if coord in self.disparos:
             return {'resultado': 'repetido', 'barco': None}
-
         self.disparos.add(coord)
 
-        # Revisamos si el disparo golpeó algún barco
         for entrada in self.barcos:
             if coord in entrada['casillas']:
                 barco   = entrada['barco']
                 hundido = barco.recibir_impacto()
                 self.celdas[fila][col] = 'impacto'
-                resultado = 'hundido' if hundido else 'impacto'
-                return {'resultado': resultado, 'barco': barco}
-
-        # No golpeó ningún barco
+                return {
+                    'resultado': 'hundido' if hundido else 'impacto',
+                    'barco':     barco,
+                    'casillas':  entrada['casillas'] if hundido else None,
+                    'dir_h':     entrada.get('dir_h', True),
+                }
         self.celdas[fila][col] = 'fallo'
         return {'resultado': 'agua', 'barco': None}
 
     def todos_hundidos(self):
-        """Retorna True si todos los barcos están hundidos."""
         return all(e['barco'].hundido for e in self.barcos)
 
 
 # ============================================================
 # CLASE: JugadorIA
-# Inteligencia Artificial con estrategia de ataque
+# IA con estrategia: modo buscar → modo atacar
 # ============================================================
 class JugadorIA:
-    """
-    IA del juego con dos modos de disparo:
-      - BUSCAR : Dispara en celdas aleatorias
-      - ATACAR : Cuando da un impacto, sigue atacando alrededor
-
-    Atributos:
-        tablero    : El tablero de la IA (donde están sus barcos)
-        modo       : 'buscar' o 'atacar'
-        pendientes : Lista de celdas a atacar próximamente
-    """
-
-    # Información de todos los barcos del juego (nombre, tamaño)
-    BARCOS_INFO = [
-        ('Portaaviones', 5),
-        ('Acorazado',    4),
-        ('Crucero',      3),
-        ('Submarino',    3),
-        ('Destructor',   2),
-    ]
+    """Computadora que coloca barcos y dispara con estrategia."""
 
     def __init__(self):
-        """Constructor: crea el tablero de la IA y coloca los barcos."""
         self.tablero    = Tablero()
-        self.modo       = 'buscar'   # Empieza buscando
-        self.pendientes = []         # Lista vacía de celdas pendientes
-        self._colocar_barcos()       # Coloca todos los barcos automáticamente
+        self.modo       = 'buscar'
+        self.pendientes = []
+        self._colocar_barcos()
 
     def _colocar_barcos(self):
-        """Coloca todos los barcos en posiciones aleatorias."""
-        for nombre, tam in self.BARCOS_INFO:
-            barco    = Barco(nombre, tam)
-            colocado = False
-            while not colocado:
+        for nombre, tam in BARCOS_INFO:
+            barco = Barco(nombre, tam)
+            ok = False
+            while not ok:
                 f     = random.randint(0, 9)
                 c     = random.randint(0, 9)
                 dir_h = random.choice([True, False])
-                colocado = self.tablero.colocar(barco, f, c, dir_h)
+                ok    = self.tablero.colocar(barco, f, c, dir_h)
 
-    def elegir_disparo(self, tablero_jugador):
-        """
-        Decide dónde disparar según la estrategia actual.
-
-        Parámetros:
-            tablero_jugador : El tablero del humano (donde disparará)
-
-        Retorna:
-            Tupla (fila, col) con la coordenada elegida
-        """
-        ya_disparados = tablero_jugador.disparos
-
-        # Si está en modo ATACAR y hay celdas pendientes
+    def elegir_disparo(self, tablero_jug):
+        ya = tablero_jug.disparos
         if self.modo == 'atacar' and self.pendientes:
             while self.pendientes:
                 f, c = self.pendientes.pop(0)
-                if (f, c) not in ya_disparados:
+                if (f, c) not in ya:
                     return (f, c)
-
-        # Si no hay pendientes, volvemos a buscar aleatoriamente
         self.modo = 'buscar'
         while True:
             f = random.randint(0, 9)
             c = random.randint(0, 9)
-            if (f, c) not in ya_disparados:
+            if (f, c) not in ya:
                 return (f, c)
 
     def notificar(self, fila, col, resultado):
-        """
-        Recibe el resultado del último disparo y ajusta la estrategia.
-
-        Parámetros:
-            fila, col : Coordenadas del disparo
-            resultado : 'agua', 'impacto' o 'hundido'
-        """
         if resultado == 'impacto':
-            # ¡Impacto! Cambiamos a modo ataque
             self.modo = 'atacar'
-            # Agregamos las 4 celdas adyacentes a la lista de pendientes
-            adyacentes = [(-1, 0), (1, 0), (0, -1), (0, 1)]
-            for df, dc in adyacentes:
+            for df, dc in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
                 nf, nc = fila + df, col + dc
-                if 0 <= nf < 10 and 0 <= nc < 10:
-                    if (nf, nc) not in self.tablero.disparos:
-                        if (nf, nc) not in self.pendientes:
-                            self.pendientes.append((nf, nc))
-
+                if 0 <= nf < 10 and 0 <= nc < 10 and (nf, nc) not in self.pendientes:
+                    self.pendientes.append((nf, nc))
         elif resultado == 'hundido':
-            # Barco hundido: reiniciamos el modo
             self.modo       = 'buscar'
             self.pendientes = []
 
 
 # ============================================================
+# CLASE: SpriteManager
+# Genera sprites pixel art para cada tipo de barco
+# ============================================================
+class SpriteManager:
+    """
+    Crea los dibujos de los barcos a resolución artística baja (PPU=11)
+    y los escala 4x para obtener el look pixel art.
+    Guarda versiones horizontales, verticales y de naufragio.
+    """
+
+    def __init__(self):
+        self.sprites_h    = {}   # nombre -> [segmento0, segmento1, ...]
+        self.sprites_v    = {}
+        self.naufragios_h = {}   # Versiones destruidas (oscurecidas)
+        self.naufragios_v = {}
+        self._generar_todos()
+
+    def obtener(self, nombre, dir_h):
+        """Retorna los segmentos de sprite en la dirección dada."""
+        return self.sprites_h[nombre] if dir_h else self.sprites_v[nombre]
+
+    def obtener_naufragio(self, nombre, dir_h):
+        """Retorna los segmentos de naufragio (barco hundido)."""
+        return self.naufragios_h[nombre] if dir_h else self.naufragios_v[nombre]
+
+    def _generar_todos(self):
+        """Genera sprites para todos los barcos, en ambas direcciones."""
+        for nombre, tam in BARCOS_INFO:
+            segs_h = self._crear_barco(nombre, tam, True)
+            segs_v = self._crear_barco(nombre, tam, False)
+            self.sprites_h[nombre]    = segs_h
+            self.sprites_v[nombre]    = segs_v
+            self.naufragios_h[nombre] = self._oscurecer(segs_h)
+            self.naufragios_v[nombre] = self._oscurecer(segs_v)
+
+    def _oscurecer(self, segmentos):
+        """Crea versión oscurecida/destruida de los sprites."""
+        result = []
+        for s in segmentos:
+            w = s.copy()
+            # Capa oscura
+            dark = pygame.Surface(w.get_size(), pygame.SRCALPHA)
+            dark.fill((0, 0, 0, 130))
+            w.blit(dark, (0, 0))
+            # Tinte rojo de daño
+            red = pygame.Surface(w.get_size(), pygame.SRCALPHA)
+            red.fill((180, 30, 0, 45))
+            w.blit(red, (0, 0))
+            result.append(w)
+        return result
+
+    def _crear_barco(self, nombre, tamano, horizontal):
+        """
+        1. Dibuja el barco completo a resolución PPU (baja)
+        2. Lo escala 4x para efecto pixel art
+        3. Lo divide en segmentos de CELDA×CELDA
+        """
+        w_art = tamano * PPU   # Ancho artístico total
+        h_art = PPU             # Alto artístico (11 px)
+
+        art = pygame.Surface((w_art, h_art), pygame.SRCALPHA)
+
+        # Dibujar casco (polígono relleno + borde)
+        puntos = self._casco(nombre, w_art, h_art)
+        pygame.draw.polygon(art, C_CUBIERTA, puntos)    # Relleno claro
+        pygame.draw.polygon(art, C_CASCO, puntos, 1)    # Borde oscuro
+
+        # Dibujar detalles específicos del tipo de barco
+        self._detalles(art, nombre, w_art, h_art)
+
+        # Escalar al tamaño real (nearest neighbor = pixel art)
+        grande = pygame.transform.scale(art, (tamano * CELDA, CELDA))
+
+        # Si es vertical, rotar 90° en sentido horario
+        if not horizontal:
+            grande = pygame.transform.rotate(grande, 90)
+
+        # Dividir en segmentos de CELDA × CELDA
+        segmentos = []
+        for i in range(tamano):
+            seg = pygame.Surface((CELDA, CELDA), pygame.SRCALPHA)
+            if horizontal:
+                seg.blit(grande, (-i * CELDA, 0))
+            else:
+                seg.blit(grande, (0, -i * CELDA))
+            segmentos.append(seg)
+        return segmentos
+
+    # ── Formas de casco (polígonos top-down) ──
+
+    def _casco(self, nombre, w, h):
+        """
+        Retorna los puntos del polígono del casco visto desde arriba.
+        La proa (frente) está a la izquierda (x=0).
+        """
+        cy = h // 2  # Centro vertical (5 para PPU=11)
+
+        if nombre == 'Portaaviones':
+            # Ancho, cubierta plana, proa apuntada
+            return [
+                (0, cy), (3, 1), (7, 1),
+                (w - 3, 1), (w - 1, 3),
+                (w - 1, h - 3), (w - 3, h - 1),
+                (7, h - 1), (3, h - 1),
+            ]
+        elif nombre == 'Acorazado':
+            # Clásico, proa afilada, cuerpo medio
+            return [
+                (0, cy), (3, 2), (6, 2),
+                (w - 3, 2), (w - 1, 4),
+                (w - 1, h - 4), (w - 3, h - 2),
+                (6, h - 2), (3, h - 2),
+            ]
+        elif nombre == 'Crucero':
+            # Esbelto, rápido
+            return [
+                (0, cy), (3, 2), (5, 2),
+                (w - 3, 2), (w - 1, 4),
+                (w - 1, h - 4), (w - 3, h - 2),
+                (5, h - 2), (3, h - 2),
+            ]
+        elif nombre == 'Submarino':
+            # Forma de cigarro, ambos extremos redondeados
+            return [
+                (1, cy), (3, 3), (5, 3),
+                (w - 5, 3), (w - 3, 3), (w - 1, cy),
+                (w - 3, h - 3), (w - 5, h - 3),
+                (5, h - 3), (3, h - 3),
+            ]
+        else:  # Destructor
+            # Pequeño y ágil, ambos extremos en punta
+            return [
+                (0, cy), (2, 3), (4, 3),
+                (w - 4, 3), (w - 1, cy),
+                (w - 4, h - 3), (4, h - 3), (2, h - 3),
+            ]
+
+    # ── Detalles de cada barco ──
+
+    def _detalles(self, surf, nombre, w, h):
+        """Dibuja torretas, puente, pista, periscopio, etc."""
+        cy = h // 2
+
+        if nombre == 'Portaaviones':
+            # Línea de pista de aterrizaje (centro)
+            pygame.draw.line(surf, C_PISTA, (5, cy), (w - 4, cy))
+            # Isla de vuelo (torre de control arriba a la derecha)
+            pygame.draw.rect(surf, C_PUENTE, (w * 3 // 4, 1, 5, 3))
+            # Antena sobre la isla
+            pygame.draw.rect(surf, C_TORRETA, (w * 3 // 4 + 1, 0, 3, 1))
+            # Marcas de pista (puntos decorativos a lo largo)
+            for x in range(10, w - 8, 7):
+                surf.set_at((x, cy - 1), C_DETALLE)
+                surf.set_at((x, cy + 1), C_DETALLE)
+
+        elif nombre == 'Acorazado':
+            # Tres torretas de cañones con líneas de cañón
+            for tx in [7, w // 2 - 1, w - 10]:
+                pygame.draw.rect(surf, C_TORRETA, (tx, cy - 2, 3, 4))
+                pygame.draw.line(surf, C_CASCO, (tx - 1, cy), (tx, cy))
+            # Puente de mando (centro)
+            pygame.draw.rect(surf, C_PUENTE, (w // 2 - 3, 2, 3, h - 4))
+            # Ventanillas del puente
+            surf.set_at((w // 2 - 2, 3), C_VENTANA)
+            surf.set_at((w // 2 - 2, h - 4), C_VENTANA)
+
+        elif nombre == 'Crucero':
+            # Torreta delantera con cañón
+            pygame.draw.rect(surf, C_TORRETA, (5, cy - 1, 3, 3))
+            pygame.draw.line(surf, C_CASCO, (4, cy), (5, cy))
+            # Puente central
+            pygame.draw.rect(surf, C_PUENTE, (w // 2 - 1, 3, 3, h - 6))
+            surf.set_at((w // 2, 3), C_VENTANA)
+            # Torreta trasera
+            pygame.draw.rect(surf, C_TORRETA, (w - 8, cy - 1, 3, 3))
+
+        elif nombre == 'Submarino':
+            # Torre de comando (sobresale del casco)
+            pygame.draw.rect(surf, C_PUENTE, (w // 2 - 2, 2, 5, 3))
+            # Periscopio (línea vertical arriba)
+            pygame.draw.line(surf, C_DETALLE, (w // 2, 0), (w // 2, 2))
+            surf.set_at((w // 2, 0), C_VENTANA)  # Lente del periscopio
+            # Timón trasero
+            pygame.draw.rect(surf, C_TORRETA, (w - 3, cy - 2, 2, 4))
+
+        else:  # Destructor
+            # Torreta delantera
+            pygame.draw.rect(surf, C_TORRETA, (4, cy - 1, 2, 3))
+            pygame.draw.line(surf, C_CASCO, (3, cy), (4, cy))
+            # Puente pequeño
+            pygame.draw.rect(surf, C_PUENTE, (w // 2, 3, 3, h - 6))
+            surf.set_at((w // 2 + 1, 3), C_VENTANA)
+
+
+# ============================================================
 # CLASE: Particula
-# Efecto visual de explosión al disparar
+# Efecto visual de explosiones, fuego, salpicaduras, burbujas
 # ============================================================
 class Particula:
     """
-    Pequeña partícula que crea efectos de explosión o salpicadura.
-    Tiene posición, velocidad, vida y color.
+    Partícula animada con posición, velocidad y vida.
+    Tipos: 'normal', 'fuego', 'burbuja', 'fragmento'.
     """
 
-    def __init__(self, x, y, color):
-        """
-        Constructor de la partícula.
-
-        Parámetros:
-            x, y  : Posición inicial en píxeles
-            color : Tupla RGB del color
-        """
+    def __init__(self, x, y, color, tipo='normal'):
         self.x     = float(x)
         self.y     = float(y)
-        self.vx    = random.uniform(-4.5, 4.5)   # Velocidad horizontal
-        self.vy    = random.uniform(-7.0, -1.0)  # Velocidad vertical (sube)
-        self.vida  = random.randint(20, 45)       # Cuántos frames dura
-        self.vida_max = self.vida
-        self.radio = random.randint(2, 6)         # Tamaño de la partícula
         self.color = color
+        self.tipo  = tipo
+
+        # Cada tipo tiene comportamiento diferente
+        if tipo == 'fuego':
+            self.vx    = random.uniform(-3, 3)
+            self.vy    = random.uniform(-6, -1)
+            self.vida  = random.randint(15, 35)
+            self.radio = random.randint(3, 7)
+        elif tipo == 'burbuja':
+            self.vx    = random.uniform(-0.5, 0.5)
+            self.vy    = random.uniform(-1.5, -0.5)
+            self.vida  = random.randint(30, 60)
+            self.radio = random.randint(2, 5)
+        elif tipo == 'fragmento':
+            self.vx    = random.uniform(-5, 5)
+            self.vy    = random.uniform(-9, -2)
+            self.vida  = random.randint(40, 80)
+            self.radio = random.randint(3, 8)
+        else:
+            self.vx    = random.uniform(-4.5, 4.5)
+            self.vy    = random.uniform(-7, -1)
+            self.vida  = random.randint(20, 45)
+            self.radio = random.randint(2, 6)
+
+        self.vida_max = self.vida
 
     def actualizar(self):
-        """Actualiza la posición y vida de la partícula cada frame."""
-        self.x    += self.vx
-        self.y    += self.vy
-        self.vy   += 0.35   # Gravedad: la jala hacia abajo
+        self.x += self.vx
+        self.y += self.vy
+        if self.tipo == 'burbuja':
+            self.x += math.sin(self.vida * 0.2) * 0.5
+            self.vy -= 0.01       # Las burbujas suben
+        else:
+            self.vy += 0.3        # Gravedad
         self.vida -= 1
 
-    def dibujar(self, superficie):
-        """Dibuja la partícula en la superficie de pygame."""
-        # La partícula se desvanece al final de su vida (efecto fade)
-        alfa = self.vida / self.vida_max
+    def dibujar(self, surface):
+        alfa = max(0, self.vida / self.vida_max)
         r, g, b = self.color
-        color_actual = (int(r * alfa), int(g * alfa), int(b * alfa))
-        radio_actual = max(1, int(self.radio * alfa))
-        pygame.draw.circle(superficie, color_actual,
-                           (int(self.x), int(self.y)), radio_actual)
+        col = (int(r * alfa), int(g * alfa), int(b * alfa))
+        rad = max(1, int(self.radio * alfa))
+        pygame.draw.circle(surface, col, (int(self.x), int(self.y)), rad)
 
     @property
     def vivo(self):
-        """Propiedad que indica si la partícula sigue activa."""
         return self.vida > 0
 
 
 # ============================================================
+# CLASE: AnimHundimiento
+# Animación dramática cuando un barco se destruye por completo
+# ============================================================
+class AnimHundimiento:
+    """
+    Fases de la animación:
+      1. Flash blanco (frames 0-15)
+      2. Onda expansiva (frames 0-50)
+      3. Fragmentos del barco vuelan y caen (frames 12-120)
+      4. Burbujas suben desde el agua (frames 20-120)
+    """
+
+    def __init__(self, casillas_px, sprites):
+        """
+        Parámetros:
+            casillas_px : lista de (px, py) coordenadas en pantalla
+            sprites     : lista de Surface de cada segmento del barco
+        """
+        self.frame     = 0
+        self.duracion  = 130
+        self.terminado = False
+        self.casillas  = casillas_px
+
+        # ── Fragmentos del barco ──
+        # Cada segmento se parte en 4 pedazos que salen volando
+        self.fragmentos = []
+        mitad = CELDA // 2
+        for (px, py), sprite in zip(casillas_px, sprites):
+            for qx, qy in [(0, 0), (mitad, 0), (0, mitad), (mitad, mitad)]:
+                frag = pygame.Surface((mitad, mitad), pygame.SRCALPHA)
+                frag.blit(sprite, (-qx, -qy))
+                self.fragmentos.append({
+                    'surf':  frag,
+                    'x':     float(px + qx),
+                    'y':     float(py + qy),
+                    'vx':    random.uniform(-4, 4),
+                    'vy':    random.uniform(-8, -2),
+                    'rot':   0.0,
+                    'vrot':  random.uniform(-7, 7),
+                    'alpha': 255.0,
+                })
+
+        # ── Burbujas que suben ──
+        self.burbujas = []
+        for px, py in casillas_px:
+            for _ in range(5):
+                self.burbujas.append({
+                    'x':     float(px + random.randint(5, CELDA - 5)),
+                    'y':     float(py + CELDA),
+                    'vy':    random.uniform(-1.2, -0.3),
+                    'radio': random.randint(2, 6),
+                    'alpha': random.uniform(130, 230),
+                    'delay': random.randint(15, 70),
+                })
+
+        # ── Onda expansiva ──
+        self.onda_radio = 0.0
+        self.onda_alpha = 255.0
+        if casillas_px:
+            self.cx = sum(p[0] for p in casillas_px) / len(casillas_px) + CELDA // 2
+            self.cy = sum(p[1] for p in casillas_px) / len(casillas_px) + CELDA // 2
+        else:
+            self.cx, self.cy = 0, 0
+
+    def actualizar(self):
+        self.frame += 1
+        if self.frame >= self.duracion:
+            self.terminado = True
+            return
+
+        # Onda expansiva crece y se desvanece
+        self.onda_radio += 4.5
+        self.onda_alpha = max(0, self.onda_alpha - 5.5)
+
+        # Los fragmentos empiezan a moverse tras el flash
+        if self.frame > 12:
+            for f in self.fragmentos:
+                f['x']     += f['vx']
+                f['y']     += f['vy']
+                f['vy']    += 0.2          # Gravedad
+                f['rot']   += f['vrot']
+                f['alpha']  = max(0, f['alpha'] - 2.8)
+
+        # Burbujas suben con un vaivén suave
+        for b in self.burbujas:
+            if self.frame > b['delay']:
+                b['y']     += b['vy']
+                b['x']     += math.sin(self.frame * 0.12 + b['x'] * 0.05) * 0.4
+                b['alpha']  = max(0, b['alpha'] - 2.0)
+
+    def dibujar(self, pantalla):
+        # ── Flash blanco sobre las celdas del barco ──
+        if self.frame < 15:
+            alpha = int(255 * (1 - self.frame / 15))
+            for px, py in self.casillas:
+                flash = pygame.Surface((CELDA, CELDA), pygame.SRCALPHA)
+                flash.fill((255, 255, 200, alpha))
+                pantalla.blit(flash, (px, py))
+
+        # ── Onda expansiva (anillo que crece) ──
+        if self.onda_alpha > 5:
+            onda_surf = pygame.Surface((ANCHO, ALTO), pygame.SRCALPHA)
+            pygame.draw.circle(
+                onda_surf,
+                (255, 200, 50, int(self.onda_alpha * 0.4)),
+                (int(self.cx), int(self.cy)),
+                int(self.onda_radio), 3
+            )
+            pantalla.blit(onda_surf, (0, 0))
+
+        # ── Fragmentos del barco volando ──
+        for f in self.fragmentos:
+            if f['alpha'] > 5:
+                rot_surf = pygame.transform.rotate(f['surf'], f['rot'])
+                rot_surf.set_alpha(int(f['alpha']))
+                pantalla.blit(rot_surf, (int(f['x']), int(f['y'])))
+
+        # ── Burbujas subiendo ──
+        for b in self.burbujas:
+            if self.frame > b['delay'] and b['alpha'] > 5:
+                bub_surf = pygame.Surface(
+                    (b['radio'] * 2 + 4, b['radio'] * 2 + 4), pygame.SRCALPHA
+                )
+                pygame.draw.circle(
+                    bub_surf,
+                    (120, 190, 255, int(b['alpha'])),
+                    (b['radio'] + 2, b['radio'] + 2),
+                    b['radio'], 1
+                )
+                pantalla.blit(bub_surf, (int(b['x']) - b['radio'],
+                                         int(b['y']) - b['radio']))
+
+
+# ============================================================
 # CLASE: BatallaNavalGUI
-# Clase principal del juego gráfico
+# Clase principal: ventana, eventos, renderizado, lógica
 # ============================================================
 class BatallaNavalGUI:
     """
-    Clase principal que maneja la ventana de pygame,
-    los eventos del mouse/teclado y el renderizado visual.
-
-    Contiene (Composición):
-      - tablero_jug : Tablero del jugador humano
-      - ia          : Objeto JugadorIA con su propio tablero
-      - particulas  : Lista de efectos visuales
+    Orquesta todo el juego: tableros, IA, sprites, animaciones.
+    Usa composición: contiene Tablero, JugadorIA, SpriteManager.
     """
 
-    # Lista de barcos del juego (clase compartida por todos)
-    BARCOS_INFO = [
-        ('Portaaviones', 5),
-        ('Acorazado',    4),
-        ('Crucero',      3),
-        ('Submarino',    3),
-        ('Destructor',   2),
-    ]
-
     def __init__(self):
-        """Constructor: crea la ventana y los objetos del juego."""
-
-        # Creamos la ventana con el tamaño definido
         self.pantalla = pygame.display.set_mode((ANCHO, ALTO))
         pygame.display.set_caption('Batalla Naval  |  BattleShip')
-
-        # Reloj para controlar los FPS (fotogramas por segundo)
         self.reloj = pygame.time.Clock()
 
-        # Fuentes de texto en diferentes tamaños
+        # Fuentes de texto
         self.f_grande = pygame.font.SysFont('Segoe UI', 52, bold=True)
         self.f_med    = pygame.font.SysFont('Segoe UI', 28, bold=True)
         self.f_norm   = pygame.font.SysFont('Segoe UI', 20)
@@ -444,675 +669,710 @@ class BatallaNavalGUI:
         self.f_celda  = pygame.font.SysFont('Segoe UI', 14, bold=True)
         self.f_mini   = pygame.font.SysFont('Segoe UI', 13)
 
-        # Iniciamos la primera partida
+        # Generador de sprites pixel art
+        self.sprite_mgr = SpriteManager()
+
         self._iniciar_partida()
 
-    # ────────────────────────────────────
-    #  INICIALIZACIÓN DE PARTIDA
-    # ────────────────────────────────────
+    # ── Reinicio de partida ──
     def _iniciar_partida(self):
-        """
-        Inicializa (o reinicia) todos los datos de la partida.
-        Se llama al inicio y cuando el jugador quiere jugar de nuevo.
-        """
-        self.tablero_jug   = Tablero()   # Tablero del jugador
-        self.ia            = JugadorIA() # IA con su tablero ya colocado
+        self.tablero_jug  = Tablero()
+        self.ia           = JugadorIA()
+        self.estado       = MENU
+        self.idx_barco    = 0
+        self.dir_h        = True
+        self.mouse_celda  = None
+        self.turno        = 'jugador'
+        self.ronda        = 0
+        self.ganador      = None
+        self.particulas   = []
+        self.animaciones  = []       # Lista de AnimHundimiento activas
+        self.esperando_ia = 0
+        self.mensaje      = ''
+        self.msg_color    = TEXTO
+        self.ticks        = 0
+        self.sacudida     = 0.0      # Efecto screen shake
+        # ── Video de hundimiento ──
+        self._video_cap          = None   # Captura de video (cv2.VideoCapture)
+        self._video_fps          = 30.0
+        self._video_timer        = 0.0    # Tiempo acumulado entre frames
+        self._fin_pendiente      = False  # True si el juego termina tras el video
+        self._turno_tras_video   = 'ia'   # A qué turno volver tras el video
 
-        self.estado        = MENU        # Empieza en el menú
-        self.idx_barco     = 0           # Índice del barco que se está colocando
-        self.dir_h         = True        # Dirección: True=Horizontal, False=Vertical
-        self.mouse_celda   = None        # Celda bajo el cursor del mouse
-        self.turno         = 'jugador'   # De quién es el turno
-        self.ronda         = 0           # Contador de rondas
-        self.ganador       = None        # Quién ganó ('jugador' o 'ia')
-        self.particulas    = []          # Lista de partículas activas
-        self.esperando_ia  = 0           # Delay del turno de la IA (en frames)
-        self.mensaje       = ''          # Texto del mensaje de estado
-        self.msg_color     = TEXTO       # Color del mensaje
-        self.ticks         = 0           # Contador de frames (para animaciones)
-
-    # ────────────────────────────────────
-    #  BUCLE PRINCIPAL DEL JUEGO
-    # ────────────────────────────────────
+    # ── Bucle principal del juego ──
     def ejecutar(self):
-        """
-        Bucle principal (game loop).
-        Se ejecuta continuamente hasta que el jugador cierra la ventana.
-        Cada iteración del ciclo es un fotograma.
-        """
         while True:
-            self.reloj.tick(FPS)        # Limitamos a 60 FPS
-            self.ticks += 1             # Incrementamos el contador de frames
+            self.reloj.tick(FPS)
+            self.ticks += 1
+            self._manejar_eventos()
+            self._actualizar()
+            self._dibujar()
+            pygame.display.flip()
 
-            self._manejar_eventos()     # Procesamos inputs del usuario
-            self._actualizar()          # Actualizamos la lógica
-            self._dibujar()             # Dibujamos todo en pantalla
-            pygame.display.flip()       # Mostramos el frame dibujado
-
-    # ────────────────────────────────────
-    #  MANEJO DE EVENTOS
-    # ────────────────────────────────────
+    # ─────────────────────────────
+    #  EVENTOS
+    # ─────────────────────────────
     def _manejar_eventos(self):
-        """
-        Lee y procesa todos los eventos del sistema
-        (cierre de ventana, teclado, mouse).
-        """
-        pos_mouse = pygame.mouse.get_pos()  # Posición actual del cursor
+        pos = pygame.mouse.get_pos()
 
-        for evento in pygame.event.get():
-
-            # ── Cierre de ventana ──
-            if evento.type == pygame.QUIT:
-                pygame.quit()
-                sys.exit()
-
-            # ── Teclado ──
-            if evento.type == pygame.KEYDOWN:
-                if evento.key == pygame.K_ESCAPE:
-                    pygame.quit()
-                    sys.exit()
-                # Tecla R: rotar barco durante la colocación
-                if self.estado == COLOCAR and evento.key == pygame.K_r:
+        for ev in pygame.event.get():
+            if ev.type == pygame.QUIT:
+                pygame.quit(); sys.exit()
+            if ev.type == pygame.KEYDOWN:
+                if ev.key == pygame.K_ESCAPE:
+                    if self.estado == VIDEO:
+                        self._terminar_video()  # Skip con ESC
+                    else:
+                        pygame.quit(); sys.exit()
+                if self.estado == COLOCAR and ev.key == pygame.K_r:
+                    self.dir_h = not self.dir_h
+                if self.estado == VIDEO:
+                    self._terminar_video()  # Cualquier tecla salta el video
+            if ev.type == pygame.MOUSEBUTTONDOWN:
+                if self.estado == VIDEO:
+                    self._terminar_video()  # Click salta el video
+                elif ev.button == 1:
+                    self._click_izq(pos)
+                elif ev.button == 3 and self.estado == COLOCAR:
                     self.dir_h = not self.dir_h
 
-            # ── Clicks del mouse ──
-            if evento.type == pygame.MOUSEBUTTONDOWN:
-                if evento.button == 1:        # Botón izquierdo
-                    self._click_izq(pos_mouse)
-                elif evento.button == 3:      # Botón derecho → rotar
-                    if self.estado == COLOCAR:
-                        self.dir_h = not self.dir_h
-
-        # Actualizamos la celda bajo el cursor según el estado
+        # Detectar celda bajo el cursor
         if self.estado == COLOCAR:
-            self.mouse_celda = self._pixel_a_celda(pos_mouse, POS_JUG)
+            self.mouse_celda = self._pixel_a_celda(pos, POS_COL)
         elif self.estado == JUGAR and self.turno == 'jugador':
-            self.mouse_celda = self._pixel_a_celda(pos_mouse, POS_ENE)
+            self.mouse_celda = self._pixel_a_celda(pos, POS_ENE)
         else:
             self.mouse_celda = None
 
     def _click_izq(self, pos):
-        """
-        Procesa el click izquierdo dependiendo del estado del juego.
-        """
-        # ── MENÚ: botón Jugar ──
         if self.estado == MENU:
             if self._r_btn_jugar().collidepoint(pos):
                 self.estado = COLOCAR
-                self._mensaje('Coloca tus barcos  |  Clic derecho o R para rotar', ACENTO)
+                self._msg('Coloca tus barcos  |  Clic derecho o R para rotar', ACENTO)
 
-        # ── COLOCAR: colocar barcos con el mouse ──
         elif self.estado == COLOCAR:
             if self._r_btn_auto().collidepoint(pos):
-                self._auto_colocar()
-                return
+                self._auto_colocar(); return
             if self._r_btn_reset().collidepoint(pos) and self.idx_barco > 0:
                 self.tablero_jug = Tablero()
-                self.idx_barco   = 0
-                self._mensaje('Tablero reiniciado', ACENTO)
-                return
-            # Clic en el tablero
-            celda = self._pixel_a_celda(pos, POS_JUG)
-            if celda and self.idx_barco < len(self.BARCOS_INFO):
+                self.idx_barco = 0
+                self._msg('Tablero reiniciado', ACENTO); return
+            celda = self._pixel_a_celda(pos, POS_COL)
+            if celda and self.idx_barco < len(BARCOS_INFO):
                 self._colocar_barco(*celda)
 
-        # ── JUGAR: disparar ──
         elif self.estado == JUGAR:
-            if self.turno == 'jugador' and self.esperando_ia == 0:
+            if self.turno == 'jugador' and self.esperando_ia == 0 and not self.animaciones:
                 celda = self._pixel_a_celda(pos, POS_ENE)
                 if celda:
                     self._disparar_jugador(*celda)
 
-        # ── FIN: botón jugar de nuevo ──
         elif self.estado == FIN:
             if self._r_btn_reiniciar().collidepoint(pos):
                 self._iniciar_partida()
                 self.estado = MENU
 
-    # ────────────────────────────────────
-    #  LÓGICA DE COLOCACIÓN DE BARCOS
-    # ────────────────────────────────────
+    # ─────────────────────────────
+    #  COLOCACIÓN DE BARCOS
+    # ─────────────────────────────
     def _colocar_barco(self, fila, col):
-        """Intenta colocar el barco actual en la celda (fila, col)."""
-        nombre, tam = self.BARCOS_INFO[self.idx_barco]
+        nombre, tam = BARCOS_INFO[self.idx_barco]
         barco = Barco(nombre, tam)
-
         if self.tablero_jug.colocar(barco, fila, col, self.dir_h):
             self.idx_barco += 1
-            if self.idx_barco >= len(self.BARCOS_INFO):
-                # Todos los barcos colocados: comenzamos la batalla
+            if self.idx_barco >= len(BARCOS_INFO):
                 self.estado = JUGAR
                 self.ronda  = 0
-                self._mensaje('¡Todos colocados! ¡Que comience la batalla!', VERDE)
+                self._msg('Todos colocados!  A batallar!', VERDE)
             else:
-                sig_n, sig_t = self.BARCOS_INFO[self.idx_barco]
-                self._mensaje(f'¡Colocado! Siguiente: {sig_n} ({sig_t} celdas)', VERDE)
+                sig = BARCOS_INFO[self.idx_barco]
+                self._msg(f'Siguiente: {sig[0]} ({sig[1]} celdas)', VERDE)
         else:
-            self._mensaje('No se puede colocar ahí. Intenta otro lugar.', ROJO_C)
+            self._msg('No se puede colocar ahi', ROJO_C)
 
     def _auto_colocar(self):
-        """Coloca todos los barcos restantes de forma aleatoria automática."""
-        while self.idx_barco < len(self.BARCOS_INFO):
-            nombre, tam = self.BARCOS_INFO[self.idx_barco]
-            barco    = Barco(nombre, tam)
-            colocado = False
-            intentos = 0
-            while not colocado and intentos < 2000:
-                f     = random.randint(0, 9)
-                c     = random.randint(0, 9)
-                dh    = random.choice([True, False])
-                colocado = self.tablero_jug.colocar(barco, f, c, dh)
-                intentos += 1
-            if colocado:
-                self.idx_barco += 1
+        while self.idx_barco < len(BARCOS_INFO):
+            n, t = BARCOS_INFO[self.idx_barco]
+            b = Barco(n, t)
+            for _ in range(3000):
+                if self.tablero_jug.colocar(
+                        b, random.randint(0, 9), random.randint(0, 9),
+                        random.choice([True, False])):
+                    break
+            self.idx_barco += 1
+        self.estado = JUGAR
+        self.ronda  = 0
+        self._msg('Barcos colocados!  A jugar!', VERDE)
 
-        if self.idx_barco >= len(self.BARCOS_INFO):
-            self.estado = JUGAR
-            self.ronda  = 0
-            self._mensaje('¡Barcos colocados automáticamente! ¡A jugar!', VERDE)
-
-    # ────────────────────────────────────
-    #  LÓGICA DE DISPARO
-    # ────────────────────────────────────
+    # ─────────────────────────────
+    #  DISPARO DEL JUGADOR
+    # ─────────────────────────────
     def _disparar_jugador(self, fila, col):
-        """Procesa el disparo del jugador en el tablero de la IA."""
         res  = self.ia.tablero.disparar(fila, col)
         tipo = res['resultado']
-
         if tipo == 'repetido':
-            self._mensaje('Ya disparaste ahí. Elige otra celda.', GRIS)
-            return
+            self._msg('Ya disparaste ahi', GRIS); return
 
         self.ronda += 1
-        # Calculamos el centro de la celda para las partículas
         cx, cy = self._celda_a_pixel(fila, col, POS_ENE)
         cx += CELDA // 2
         cy += CELDA // 2
 
         if tipo == 'agua':
-            self._emit_particulas(cx, cy, FALLO_C, 10)
-            self._mensaje('Agua... Tu disparo cayó al mar.', FALLO_C)
+            self._emit(cx, cy, FALLO_C, 10, 'normal')
+            self._emit(cx, cy, (120, 180, 255), 5, 'burbuja')
+            self._msg('Agua... Disparo al mar', FALLO_C)
         elif tipo == 'impacto':
-            self._emit_particulas(cx, cy, IMPACTO, 22)
-            self._mensaje(f'IMPACTO en el {res["barco"].nombre}!', ACENTO)
+            self._emit(cx, cy, IMPACTO, 20, 'fuego')
+            self._emit(cx, cy, C_FUEGO1, 15, 'fuego')
+            self.sacudida = 7
+            self._msg(f'IMPACTO en el {res["barco"].nombre}!', ACENTO)
         elif tipo == 'hundido':
-            self._emit_particulas(cx, cy, IMPACTO, 38)
-            self._emit_particulas(cx, cy, ACENTO, 18)
-            self._mensaje(f'HUNDISTE el {res["barco"].nombre}!', VERDE)
-
-        # ¿Ganó el jugador?
-        if self.ia.tablero.todos_hundidos():
-            self.ganador = 'jugador'
-            self.estado  = FIN
+            self._emit(cx, cy, IMPACTO, 30, 'fuego')
+            self._emit(cx, cy, C_FUEGO1, 20, 'fuego')
+            self._emit(cx, cy, ACENTO, 12, 'fragmento')
+            self.sacudida = 14
+            self._msg(f'HUNDISTE el {res["barco"].nombre}!', VERDE)
+            self._crear_anim_hundimiento(
+                res['barco'], res['casillas'], res['dir_h'], POS_ENE
+            )
+            # ── Reproducir video por cada barco hundido ──
+            if self.ia.tablero.todos_hundidos():
+                self.ganador         = 'jugador'
+                self._fin_pendiente  = True
+            else:
+                self._fin_pendiente    = False
+                self._turno_tras_video = 'ia'
+            self._iniciar_video()
             return
 
-        # Pasamos el turno a la IA (con delay de ~1.5 s)
         self.turno        = 'ia'
         self.esperando_ia = 90
-        self._mensaje('La computadora está pensando...', GRIS)
 
+    # ─────────────────────────────
+    #  TURNO DE LA IA
+    # ─────────────────────────────
     def _turno_ia(self):
-        """Ejecuta el disparo de la IA en el tablero del jugador."""
-        fila, col = self.ia.elegir_disparo(self.tablero_jug)
-        res  = self.tablero_jug.disparar(fila, col)
+        f, c = self.ia.elegir_disparo(self.tablero_jug)
+        res  = self.tablero_jug.disparar(f, c)
         tipo = res['resultado']
-        self.ia.notificar(fila, col, tipo)
+        self.ia.notificar(f, c, tipo)
 
-        cx, cy = self._celda_a_pixel(fila, col, POS_JUG)
+        cx, cy = self._celda_a_pixel(f, c, POS_JUG)
         cx += CELDA // 2
         cy += CELDA // 2
 
         if tipo == 'agua':
-            self._emit_particulas(cx, cy, FALLO_C, 10)
-            self._mensaje('La computadora falló. ¡Al agua!', VERDE)
+            self._emit(cx, cy, FALLO_C, 10, 'normal')
+            self._msg('La computadora fallo!', VERDE)
         elif tipo == 'impacto':
-            self._emit_particulas(cx, cy, IMPACTO, 22)
-            self._mensaje(f'¡La compu golpeó tu {res["barco"].nombre}!', ROJO_C)
+            self._emit(cx, cy, IMPACTO, 20, 'fuego')
+            self._emit(cx, cy, C_FUEGO1, 12, 'fuego')
+            self.sacudida = 7
+            self._msg(f'Golpearon tu {res["barco"].nombre}!', ROJO_C)
         elif tipo == 'hundido':
-            self._emit_particulas(cx, cy, IMPACTO, 38)
-            self._mensaje(f'¡La compu hundió tu {res["barco"].nombre}!', ROJO_C)
-
-        # ¿Ganó la IA?
-        if self.tablero_jug.todos_hundidos():
-            self.ganador = 'ia'
-            self.estado  = FIN
+            self._emit(cx, cy, IMPACTO, 35, 'fuego')
+            self._emit(cx, cy, C_FUEGO1, 20, 'fuego')
+            self._emit(cx, cy, ROJO_C, 10, 'fragmento')
+            self.sacudida = 14
+            self._msg(f'Hundieron tu {res["barco"].nombre}!', ROJO_C)
+            self._crear_anim_hundimiento(
+                res['barco'], res['casillas'], res['dir_h'], POS_JUG
+            )
+            # ── Reproducir video por cada barco hundido ──
+            if self.tablero_jug.todos_hundidos():
+                self.ganador         = 'ia'
+                self._fin_pendiente  = True
+            else:
+                self._fin_pendiente    = False
+                self._turno_tras_video = 'jugador'
+            self._iniciar_video()
             return
 
         self.turno = 'jugador'
 
-    # ────────────────────────────────────
-    #  ACTUALIZACIÓN LÓGICA
-    # ────────────────────────────────────
+    # ─────────────────────────────
+    #  VIDEO DE FIN DE PARTIDA
+    # ─────────────────────────────
+    def _iniciar_video(self):
+        """Abre el video y cambia el estado a VIDEO para reproducirlo."""
+        if CV2_OK and os.path.exists(VIDEO_PATH):
+            self._video_cap   = cv2.VideoCapture(VIDEO_PATH)
+            self._video_fps   = self._video_cap.get(cv2.CAP_PROP_FPS) or 30.0
+            self._video_timer = 0.0
+            self.estado       = VIDEO
+        else:
+            # Sin cv2 o sin video, ir directo al estado FIN
+            self.estado = FIN
+
+    def _terminar_video(self):
+        """Libera el video. Si fue el último barco va a FIN; si no, continúa el juego."""
+        if self._video_cap is not None:
+            self._video_cap.release()
+            self._video_cap = None
+        if self._fin_pendiente:
+            self._fin_pendiente = False
+            self.estado = FIN
+        else:
+            self.estado = JUGAR
+            self.turno  = self._turno_tras_video
+            if self._turno_tras_video == 'ia':
+                self.esperando_ia = 90
+
+    def _actualizar_video(self):
+        """Avanza al siguiente frame del video según el FPS del clip."""
+        if self._video_cap is None:
+            self.estado = FIN
+            return
+        # Avanzar timer; 1 tick = 1 frame de juego (60 fps)
+        self._video_timer += 60.0 / self._video_fps
+        frames_a_avanzar = int(self._video_timer)
+        self._video_timer -= frames_a_avanzar
+
+        frame_surf = None
+        for _ in range(max(1, frames_a_avanzar)):
+            ok, frame = self._video_cap.read()
+            if not ok:
+                self._terminar_video()
+                return
+            frame_surf = frame
+
+        if frame_surf is not None:
+            # Convertir BGR (OpenCV) → RGB y crear Surface de pygame
+            frame_rgb  = cv2.cvtColor(frame_surf, cv2.COLOR_BGR2RGB)
+            h, w       = frame_rgb.shape[:2]
+            # Escalar para que quepa en la ventana manteniendo proporción
+            escala     = min(ANCHO / w, ALTO / h)
+            nw, nh     = int(w * escala), int(h * escala)
+            frame_rgb  = cv2.resize(frame_rgb, (nw, nh), interpolation=cv2.INTER_LINEAR)
+            self._video_frame = pygame.surfarray.make_surface(
+                np.transpose(frame_rgb, (1, 0, 2))
+            )
+        else:
+            self._video_frame = None
+
+    def _dibujar_video(self):
+        """Dibuja el frame actual del video centrado en pantalla negra."""
+        self.pantalla.fill((0, 0, 0))
+        if hasattr(self, '_video_frame') and self._video_frame is not None:
+            vw = self._video_frame.get_width()
+            vh = self._video_frame.get_height()
+            x  = (ANCHO - vw) // 2
+            y  = (ALTO  - vh) // 2
+            self.pantalla.blit(self._video_frame, (x, y))
+        # Texto de skip
+        skip_t = self.f_small.render('Presiona cualquier tecla o clic para saltar', True, (160, 160, 160))
+        self.pantalla.blit(skip_t, (ANCHO // 2 - skip_t.get_width() // 2, ALTO - 30))
+
+    def _crear_anim_hundimiento(self, barco, casillas, dir_h, origen):
+        """Crea la animación de destrucción para el barco hundido."""
+        sprites     = self.sprite_mgr.obtener(barco.nombre, dir_h)
+        casillas_px = [self._celda_a_pixel(f, c, origen) for f, c in casillas]
+        self.animaciones.append(AnimHundimiento(casillas_px, sprites))
+
+    # ─────────────────────────────
+    #  ACTUALIZACIÓN
+    # ─────────────────────────────
     def _actualizar(self):
-        """
-        Actualiza la lógica del juego cada frame.
-        Se llama 60 veces por segundo.
-        """
-        # Actualizar y limpiar partículas muertas
+        # ── Estado VIDEO: solo avanzar frames ──
+        if self.estado == VIDEO:
+            self._actualizar_video()
+            return
+
+        # Partículas
         self.particulas = [p for p in self.particulas if p.vivo]
         for p in self.particulas:
             p.actualizar()
 
-        # Temporizador del turno de la IA
-        if self.estado == JUGAR and self.turno == 'ia' and self.esperando_ia > 0:
+        # Animaciones de hundimiento
+        for a in self.animaciones:
+            a.actualizar()
+        self.animaciones = [a for a in self.animaciones if not a.terminado]
+
+        # Screen shake se atenúa
+        if self.sacudida > 0:
+            self.sacudida *= 0.85
+            if self.sacudida < 0.5:
+                self.sacudida = 0
+
+        # Turno de la IA (espera a que terminen las animaciones)
+        if (self.estado == JUGAR and self.turno == 'ia'
+                and self.esperando_ia > 0 and not self.animaciones):
             self.esperando_ia -= 1
             if self.esperando_ia == 0:
                 self._turno_ia()
 
-    # ────────────────────────────────────
-    #  RENDERIZADO (DIBUJO)
-    # ────────────────────────────────────
+    # ─────────────────────────────
+    #  RENDERIZADO
+    # ─────────────────────────────
     def _dibujar(self):
-        """Dibuja todos los elementos visuales en pantalla."""
-        self.pantalla.fill(FONDO)          # Fondo oscuro
-        self._dibujar_fondo()              # Líneas decorativas
+        self.pantalla.fill(FONDO)
 
-        # Cada estado tiene su propia pantalla
+        # Offset de sacudida de pantalla
+        sx = int(random.uniform(-self.sacudida, self.sacudida)) if self.sacudida > 0.5 else 0
+        sy = int(random.uniform(-self.sacudida, self.sacudida)) if self.sacudida > 0.5 else 0
+
+        self._dibujar_fondo()
+
         if self.estado == MENU:
             self._dibujar_menu()
         elif self.estado == COLOCAR:
             self._dibujar_colocar()
         elif self.estado == JUGAR:
-            self._dibujar_juego()
+            self._dibujar_juego(sx, sy)
+        elif self.estado == VIDEO:
+            self._dibujar_video()
+            return  # No dibujar nada más durante el video
         elif self.estado == FIN:
-            self._dibujar_juego()          # El juego de fondo
-            self._dibujar_fin()            # Overlay de fin encima
+            self._dibujar_juego(sx, sy)
+            self._dibujar_fin()
 
-        # Las partículas van siempre en el frente
+        # Partículas y animaciones siempre encima de todo
         for p in self.particulas:
             p.dibujar(self.pantalla)
+        for a in self.animaciones:
+            a.dibujar(self.pantalla)
 
     def _dibujar_fondo(self):
-        """Dibuja líneas diagonales decorativas en el fondo."""
+        """Líneas diagonales decorativas animadas."""
         t = self.ticks * 0.3
         for i in range(-5, 25):
             x = int((i * 55 + t) % (ANCHO + 100)) - 50
-            pygame.draw.line(self.pantalla, (16, 30, 75),
-                             (x, 0), (x + 300, ALTO), 1)
+            pygame.draw.line(self.pantalla, (16, 30, 75), (x, 0), (x + 300, ALTO), 1)
 
-    # ── MENÚ ──────────────────────────────
+    # ── MENÚ ──
     def _dibujar_menu(self):
-        """Pantalla de bienvenida con título y botón de inicio."""
-
-        # Título principal
         t = self.f_grande.render('BATALLA NAVAL', True, TITULO_C)
-        self.pantalla.blit(t, (ANCHO//2 - t.get_width()//2, 95))
+        self.pantalla.blit(t, (ANCHO // 2 - t.get_width() // 2, 80))
 
         sub = self.f_med.render('B A T T L E S H I P', True, ACENTO)
-        self.pantalla.blit(sub, (ANCHO//2 - sub.get_width()//2, 162))
+        self.pantalla.blit(sub, (ANCHO // 2 - sub.get_width() // 2, 145))
 
-        # Línea separadora
         pygame.draw.line(self.pantalla, BORDE,
-                         (ANCHO//2 - 280, 205), (ANCHO//2 + 280, 205), 1)
+                         (ANCHO // 2 - 280, 188), (ANCHO // 2 + 280, 188))
 
-        # Lista de barcos con representación visual
-        info_barcos = [
-            ('Portaaviones', 5, BARCO_OK),
-            ('Acorazado',    4, (50, 190, 100)),
-            ('Crucero',      3, (65, 205, 115)),
-            ('Submarino',    3, (80, 180, 90)),
-            ('Destructor',   2, (95, 195, 105)),
-        ]
-        y0 = 225
-        bw = 28   # Ancho de cada bloque visual
-        for nombre, tam, color in info_barcos:
-            # Nombre del barco
+        # Lista de barcos con sus sprites pixel art
+        y0 = 210
+        for nombre, tam in BARCOS_INFO:
             tn = self.f_norm.render(nombre, True, TEXTO)
-            self.pantalla.blit(tn, (ANCHO//2 - 240, y0))
-            # Bloques de color que representan el tamaño
-            for b in range(tam):
-                r = pygame.Rect(ANCHO//2 - 20 + b * (bw + 3), y0 + 2, bw, 20)
-                pygame.draw.rect(self.pantalla, color, r, border_radius=4)
-            # Texto del tamaño
-            ts = self.f_small.render(f'{tam} celdas', True, GRIS)
-            self.pantalla.blit(ts, (ANCHO//2 + 165, y0 + 2))
-            y0 += 38
+            self.pantalla.blit(tn, (ANCHO // 2 - 260, y0 + 8))
 
-        # Instrucciones de control
+            # Dibujar el sprite pixel art del barco
+            sprites = self.sprite_mgr.obtener(nombre, True)
+            for i, seg in enumerate(sprites):
+                self.pantalla.blit(seg, (ANCHO // 2 - 30 + i * CELDA, y0))
+
+            ts = self.f_small.render(f'{tam} celdas', True, GRIS)
+            self.pantalla.blit(ts, (ANCHO // 2 + tam * CELDA, y0 + 10))
+            y0 += 52
+
+        # Instrucciones
         inst = [
-            'Click izquierdo → Colocar barco / Disparar',
-            'Click derecho  o  R → Rotar barco',
-            'ESC → Salir del juego',
+            'Click izquierdo  ->  Colocar / Disparar',
+            'Click derecho  o  R  ->  Rotar barco',
+            'ESC  ->  Salir',
         ]
-        y0 += 15
+        y0 += 5
         for ln in inst:
             ti = self.f_small.render(ln, True, GRIS)
-            self.pantalla.blit(ti, (ANCHO//2 - ti.get_width()//2, y0))
-            y0 += 24
+            self.pantalla.blit(ti, (ANCHO // 2 - ti.get_width() // 2, y0))
+            y0 += 22
 
-        # Botón de inicio
         self._boton(self._r_btn_jugar(), 'COMENZAR JUEGO', self.f_med)
 
-    # ── COLOCAR ───────────────────────────
+    # ── COLOCAR ──
     def _dibujar_colocar(self):
-        """Pantalla de colocación manual de barcos."""
-
-        # Título
         t = self.f_med.render('COLOCA TUS BARCOS', True, TITULO_C)
-        self.pantalla.blit(t, (ANCHO//2 - t.get_width()//2, 12))
+        self.pantalla.blit(t, (ANCHO // 2 - t.get_width() // 2, 12))
 
-        # Tablero del jugador (centrado horizontalmente)
-        ox, oy = 365, 108
-        self._dibujar_tablero(self.tablero_jug, ox, oy, mostrar_barcos=True)
-        self._dibujar_etiquetas(ox, oy)
+        self._dibujar_tablero(self.tablero_jug, *POS_COL, mostrar_barcos=True)
+        self._dibujar_etiquetas(*POS_COL)
 
-        # Preview del barco mientras el mouse está sobre el tablero
-        if self.mouse_celda and self.idx_barco < len(self.BARCOS_INFO):
-            nombre, tam = self.BARCOS_INFO[self.idx_barco]
-            f, c = self.mouse_celda
-            valido    = self.tablero_jug.puede_colocar(f, c, tam, self.dir_h)
-            col_prev  = BARCO_H if valido else BARCO_MAL
-            casillas  = self.tablero_jug._calcular_casillas(f, c, tam, self.dir_h)
+        # Preview del barco con el sprite real
+        if self.mouse_celda and self.idx_barco < len(BARCOS_INFO):
+            nombre, tam = BARCOS_INFO[self.idx_barco]
+            f, c     = self.mouse_celda
+            valido   = self.tablero_jug.puede_colocar(f, c, tam, self.dir_h)
+            casillas = self.tablero_jug._calcular_casillas(f, c, tam, self.dir_h)
+            sprites  = self.sprite_mgr.obtener(nombre, self.dir_h)
+
             if casillas:
-                for cf, cc in casillas:
-                    if 0 <= cf < FILAS and 0 <= cc < COLS:
-                        px, py = self._celda_a_pixel(cf, cc, (ox, oy))
-                        s = pygame.Surface((CELDA - 2, CELDA - 2), pygame.SRCALPHA)
-                        s.fill((*col_prev, 180))
-                        self.pantalla.blit(s, (px + 1, py + 1))
+                for i, (cf, cc) in enumerate(casillas):
+                    if 0 <= cf < FILAS and 0 <= cc < COLS and i < len(sprites):
+                        px, py = self._celda_a_pixel(cf, cc, POS_COL)
+                        # Sprite semitransparente
+                        s_copy = sprites[i].copy()
+                        s_copy.set_alpha(180)
+                        self.pantalla.blit(s_copy, (px, py))
+                        # Overlay verde (válido) o rojo (inválido)
+                        ov = pygame.Surface((CELDA, CELDA), pygame.SRCALPHA)
+                        ov.fill((50, 255, 100, 35) if valido else (255, 50, 50, 75))
+                        self.pantalla.blit(ov, (px, py))
 
         # Info del barco actual
-        if self.idx_barco < len(self.BARCOS_INFO):
-            nombre, tam = self.BARCOS_INFO[self.idx_barco]
-            dir_txt = '→ Horizontal' if self.dir_h else '↓ Vertical'
-            info = f'Colocando:  {nombre}  ({tam} celdas)    |    Dirección: {dir_txt}'
-            ti   = self.f_norm.render(info, True, ACENTO)
-            self.pantalla.blit(ti, (ANCHO//2 - ti.get_width()//2, 75))
-        else:
-            ti = self.f_norm.render('¡Todos los barcos colocados!', True, VERDE)
-            self.pantalla.blit(ti, (ANCHO//2 - ti.get_width()//2, 75))
+        if self.idx_barco < len(BARCOS_INFO):
+            nombre, tam = BARCOS_INFO[self.idx_barco]
+            dir_txt = '-> Horizontal' if self.dir_h else '|  Vertical'
+            info = f'{nombre}  ({tam} celdas)   {dir_txt}'
+            ti = self.f_norm.render(info, True, ACENTO)
+            self.pantalla.blit(ti, (ANCHO // 2 - ti.get_width() // 2, 65))
 
         # Lista lateral de barcos
-        xl, yl = 75, 125
-        th = self.f_small.render('BARCOS:', True, GRIS)
-        self.pantalla.blit(th, (xl, yl))
-        for i, (nb, tam) in enumerate(self.BARCOS_INFO):
-            if i < self.idx_barco:
-                col_item, marca = VERDE, '✓'
-            elif i == self.idx_barco:
-                col_item, marca = ACENTO, '▶'
-            else:
-                col_item, marca = GRIS, '○'
-            ti = self.f_small.render(f'{marca}  {nb}  ({tam})', True, col_item)
+        xl, yl = 68, 130
+        self.pantalla.blit(self.f_small.render('BARCOS:', True, GRIS), (xl, yl))
+        for i, (nb, tam) in enumerate(BARCOS_INFO):
+            if   i < self.idx_barco:  col, marca = VERDE, '+'
+            elif i == self.idx_barco: col, marca = ACENTO, '>'
+            else:                     col, marca = GRIS, 'o'
+            ti = self.f_small.render(f'{marca} {nb} ({tam})', True, col)
             self.pantalla.blit(ti, (xl, yl + 24 + i * 26))
 
         # Botones
         self._boton(self._r_btn_auto(), 'AUTO', self.f_norm)
         if self.idx_barco > 0:
             self._boton(self._r_btn_reset(), 'REINICIAR', self.f_norm)
-
         self._dibujar_msg()
 
-    # ── JUEGO ─────────────────────────────
-    def _dibujar_juego(self):
-        """Pantalla principal de batalla con los dos tableros."""
-
-        # Encabezado con el número de ronda
+    # ── JUEGO ──
+    def _dibujar_juego(self, sx=0, sy=0):
         t = self.f_med.render(f'RONDA  {self.ronda}', True, ACENTO)
-        self.pantalla.blit(t, (ANCHO//2 - t.get_width()//2, 8))
+        self.pantalla.blit(t, (ANCHO // 2 - t.get_width() // 2, 8))
 
-        # Etiqueta del tablero del jugador
         t1 = self.f_norm.render('TU TABLERO', True, VERDE)
-        self.pantalla.blit(t1, (POS_JUG[0] + COLS*CELDA//2 - t1.get_width()//2, 118))
-
-        # Etiqueta del tablero enemigo
+        self.pantalla.blit(t1, (POS_JUG[0] + COLS * CELDA // 2 - t1.get_width() // 2 + sx,
+                                118 + sy))
         t2 = self.f_norm.render('TABLERO ENEMIGO', True, ROJO_C)
-        self.pantalla.blit(t2, (POS_ENE[0] + COLS*CELDA//2 - t2.get_width()//2, 105))
+        self.pantalla.blit(t2, (POS_ENE[0] + COLS * CELDA // 2 - t2.get_width() // 2 + sx,
+                                105 + sy))
 
         # Indicador de turno
         if self.estado == JUGAR:
             if self.turno == 'jugador':
-                hint = 'Click para disparar'
-                hcol = ACENTO
+                hint, hcol = 'Haz click para disparar', ACENTO
             else:
-                hint = 'Computadora pensando...'
-                hcol = GRIS
+                hint, hcol = 'Computadora pensando...', GRIS
             th = self.f_small.render(hint, True, hcol)
-            self.pantalla.blit(th, (POS_ENE[0] + COLS*CELDA//2 - th.get_width()//2, 128))
+            self.pantalla.blit(th, (POS_ENE[0] + COLS * CELDA // 2 - th.get_width() // 2, 128))
 
-        # Tablero del jugador (barcos visibles)
-        self._dibujar_tablero(self.tablero_jug, *POS_JUG, mostrar_barcos=True)
-        self._dibujar_etiquetas(*POS_JUG)
+        # Tableros con offset de sacudida
+        jug_pos = (POS_JUG[0] + sx, POS_JUG[1] + sy)
+        ene_pos = (POS_ENE[0] + sx, POS_ENE[1] + sy)
 
-        # Tablero del enemigo (barcos ocultos)
-        self._dibujar_tablero(self.ia.tablero, *POS_ENE, mostrar_barcos=False)
-        self._dibujar_etiquetas(*POS_ENE)
+        self._dibujar_tablero(self.tablero_jug, *jug_pos, mostrar_barcos=True)
+        self._dibujar_etiquetas(*jug_pos)
+        self._dibujar_tablero(self.ia.tablero, *ene_pos, mostrar_barcos=False)
+        self._dibujar_etiquetas(*ene_pos)
 
-        # Hover en el tablero enemigo durante el turno del jugador
+        # Hover pulsante sobre celda enemiga
         if self.estado == JUGAR and self.mouse_celda and self.turno == 'jugador':
             f, c = self.mouse_celda
             if (f, c) not in self.ia.tablero.disparos:
-                px, py = self._celda_a_pixel(f, c, POS_ENE)
+                px, py = self._celda_a_pixel(f, c, ene_pos)
                 s = pygame.Surface((CELDA - 2, CELDA - 2), pygame.SRCALPHA)
-                # Efecto de pulso con seno
                 alpha = int(128 + 60 * math.sin(self.ticks * 0.15))
                 s.fill((255, 255, 255, alpha))
                 self.pantalla.blit(s, (px + 1, py + 1))
+                # Coordenada sobre la celda
+                ct = self.f_mini.render(f'{chr(65 + c)}{f + 1}', True, BLANCO)
+                self.pantalla.blit(ct, (px + CELDA // 2 - ct.get_width() // 2,
+                                        py + CELDA // 2 - ct.get_height() // 2))
 
-                # Coordenada de la celda sobre el hover
-                letra = chr(ord('A') + c)
-                ct = self.f_mini.render(f'{letra}{f+1}', True, BLANCO)
-                self.pantalla.blit(ct, (px + CELDA//2 - ct.get_width()//2,
-                                        py + CELDA//2 - ct.get_height()//2))
-
-        # Panel lateral con estado de los barcos
         self._dibujar_panel()
-
-        # Mensaje de estado
         if self.estado == JUGAR:
             self._dibujar_msg()
 
+    # ── TABLERO (renderizado con sprites) ──
+    def _dibujar_tablero(self, tablero, ox, oy, mostrar_barcos):
+        """
+        Dibuja un tablero completo con agua animada, sprites de barcos,
+        fuego en impactos, naufragios para barcos hundidos.
+        """
+        for f in range(FILAS):
+            for c in range(COLS):
+                px = ox + c * CELDA
+                py = oy + f * CELDA
+                estado = tablero.celdas[f][c]
+                info   = tablero.mapa[f][c]   # (idx_barco, idx_seg, dir_h)
+                rect   = pygame.Rect(px + 1, py + 1, CELDA - 2, CELDA - 2)
+
+                # 1. Fondo de agua con animación de olas
+                onda    = int(8 * math.sin(self.ticks * 0.04 + f * 0.5 + c * 0.3))
+                col_agua = (AGUA[0], AGUA[1] + onda, min(255, AGUA[2] + onda))
+                pygame.draw.rect(self.pantalla, col_agua, rect, border_radius=4)
+
+                # 2. Contenido de la celda
+                if estado == 'barco' and mostrar_barcos and info:
+                    # ── Barco intacto: dibujar sprite pixel art ──
+                    bi, si, dh = info
+                    nombre = tablero.barcos[bi]['barco'].nombre
+                    sprite = self.sprite_mgr.obtener(nombre, dh)[si]
+                    self.pantalla.blit(sprite, (px, py))
+
+                elif estado == 'impacto' and info:
+                    bi, si, dh = info
+                    barco_obj = tablero.barcos[bi]['barco']
+                    nombre    = barco_obj.nombre
+
+                    if barco_obj.hundido:
+                        # ── Barco hundido: mostrar naufragio ──
+                        nauf = self.sprite_mgr.obtener_naufragio(nombre, dh)[si]
+                        self.pantalla.blit(nauf, (px, py))
+                    elif mostrar_barcos:
+                        # ── Barco dañado (tablero propio): sprite + fuego ──
+                        sprite = self.sprite_mgr.obtener(nombre, dh)[si]
+                        self.pantalla.blit(sprite, (px, py))
+                    else:
+                        # ── Tablero enemigo: solo celda roja ──
+                        pygame.draw.rect(self.pantalla, IMPACTO, rect, border_radius=4)
+
+                    # Fuego animado sobre celdas impactadas
+                    self._dibujar_fuego(px, py, f, c)
+
+                    # Marca X de impacto
+                    txt = self.f_celda.render('X', True, BLANCO)
+                    self.pantalla.blit(txt, (px + CELDA // 2 - txt.get_width() // 2,
+                                            py + CELDA // 2 - txt.get_height() // 2))
+
+                elif estado == 'impacto':
+                    # Impacto sin info (fallback)
+                    pygame.draw.rect(self.pantalla, IMPACTO, rect, border_radius=4)
+                    txt = self.f_celda.render('X', True, BLANCO)
+                    self.pantalla.blit(txt, (px + CELDA // 2 - txt.get_width() // 2,
+                                            py + CELDA // 2 - txt.get_height() // 2))
+
+                elif estado == 'fallo':
+                    # Disparo fallido
+                    pygame.draw.rect(self.pantalla, FALLO_C, rect, border_radius=4)
+                    pygame.draw.circle(self.pantalla, (150, 180, 220),
+                                       (px + CELDA // 2, py + CELDA // 2), 4)
+
+                # 3. Borde de celda
+                pygame.draw.rect(self.pantalla, BORDE, rect, 1, border_radius=4)
+
+    def _dibujar_fuego(self, px, py, fila, col):
+        """Llamas animadas sobre una celda dañada (determinísticas por posición)."""
+        t = self.ticks
+        for i in range(4):
+            phase = fila * 13 + col * 7 + i * 23
+            fx = px + CELDA // 2 + int(8 * math.sin(t * 0.08 + phase))
+            fy = py + CELDA // 2 + int(6 * math.cos(t * 0.12 + phase)) - 5
+            r  = 3 + int(2 * abs(math.sin(t * 0.15 + phase * 0.5)))
+            bright = abs(math.sin(t * 0.1 + phase))
+            color  = (255, int(80 + 100 * bright), 0)
+            pygame.draw.circle(self.pantalla, color, (fx, fy), max(1, r))
+        # Humo encima de las llamas
+        for i in range(2):
+            phase = fila * 17 + col * 11 + i * 31
+            sx = px + CELDA // 2 + int(5 * math.sin(t * 0.05 + phase))
+            sy = py + int(10 * abs(math.sin(t * 0.06 + phase)))
+            gray = 45 + int(15 * math.sin(t * 0.04 + phase))
+            pygame.draw.circle(self.pantalla, (gray, gray, gray + 5), (sx, sy), 4)
+
+    # ── PANEL LATERAL (estado de barcos) ──
     def _dibujar_panel(self):
-        """Panel lateral derecho que muestra el estado de los barcos."""
         bx = POS_ENE[0] + COLS * CELDA + 22
         by = 158
 
-        # ─ Tus barcos ─
-        th = self.f_small.render('TUS BARCOS', True, GRIS)
-        self.pantalla.blit(th, (bx, by))
+        self.pantalla.blit(self.f_small.render('TUS BARCOS', True, GRIS), (bx, by))
         by += 22
-
-        for entrada in self.tablero_jug.barcos:
-            b = entrada['barco']
-            if b.hundido:
-                color = ROJO_C
-                estado_txt = 'Hundido'
-            else:
-                color = VERDE
-                estado_txt = f'{b.impactos}/{b.tamano}'
-            tn = self.f_mini.render(f'{b.nombre[:12]}', True, color)
-            ts = self.f_mini.render(estado_txt, True, color)
-            self.pantalla.blit(tn, (bx, by))
-            self.pantalla.blit(ts, (bx + 115, by))
+        for e in self.tablero_jug.barcos:
+            b = e['barco']
+            col = ROJO_C if b.hundido else VERDE
+            est = 'Hundido' if b.hundido else f'{b.impactos}/{b.tamano}'
+            self.pantalla.blit(self.f_mini.render(b.nombre[:12], True, col), (bx, by))
+            self.pantalla.blit(self.f_mini.render(est, True, col), (bx + 115, by))
             by += 20
 
         by += 18
-        # ─ Barcos enemigos ─
-        th = self.f_small.render('BARCOS ENEMIGOS', True, GRIS)
-        self.pantalla.blit(th, (bx, by))
+        self.pantalla.blit(self.f_small.render('ENEMIGOS', True, GRIS), (bx, by))
         by += 22
-
-        for entrada in self.ia.tablero.barcos:
-            b = entrada['barco']
-            if b.hundido:
-                color = ROJO_C
-                estado_txt = 'Hundido'
-            else:
-                color = GRIS
-                estado_txt = '???'
-            tn = self.f_mini.render(f'{b.nombre[:12]}', True, color)
-            ts = self.f_mini.render(estado_txt, True, color)
-            self.pantalla.blit(tn, (bx, by))
-            self.pantalla.blit(ts, (bx + 115, by))
+        for e in self.ia.tablero.barcos:
+            b = e['barco']
+            col = ROJO_C if b.hundido else GRIS
+            est = 'Hundido' if b.hundido else '???'
+            self.pantalla.blit(self.f_mini.render(b.nombre[:12], True, col), (bx, by))
+            self.pantalla.blit(self.f_mini.render(est, True, col), (bx + 115, by))
             by += 20
 
-    # ── FIN ───────────────────────────────
+    # ── FIN DEL JUEGO ──
     def _dibujar_fin(self):
-        """Pantalla de fin de juego con overlay oscuro."""
-        # Capa semitransparente oscura sobre el juego
         overlay = pygame.Surface((ANCHO, ALTO), pygame.SRCALPHA)
         overlay.fill((0, 0, 0, 175))
         self.pantalla.blit(overlay, (0, 0))
 
-        # Caja central
-        caja = pygame.Rect(ANCHO//2 - 320, ALTO//2 - 170, 640, 300)
-        pygame.draw.rect(self.pantalla, PANEL, caja, border_radius=18)
+        caja = pygame.Rect(ANCHO // 2 - 320, ALTO // 2 - 170, 640, 300)
+        pygame.draw.rect(self.pantalla, PANEL_C, caja, border_radius=18)
         pygame.draw.rect(self.pantalla, BORDE_H, caja, 2, border_radius=18)
 
         if self.ganador == 'jugador':
-            titulo  = '¡¡ GANASTE !!'
-            color_t = VERDE
-            sub_txt = f'Hundiste todos los barcos enemigos en {self.ronda} rondas'
+            titulo, col_t = 'GANASTE !!', VERDE
+            sub = f'Hundiste todos los barcos en {self.ronda} rondas'
         else:
-            titulo  = '¡¡ PERDISTE !!'
-            color_t = ROJO_C
-            sub_txt = f'La computadora hundió todos tus barcos en {self.ronda} rondas'
+            titulo, col_t = 'PERDISTE !!', ROJO_C
+            sub = f'La computadora gano en {self.ronda} rondas'
 
-        t = self.f_grande.render(titulo, True, color_t)
-        self.pantalla.blit(t, (ANCHO//2 - t.get_width()//2, ALTO//2 - 145))
-
-        s = self.f_norm.render(sub_txt, True, TEXTO)
-        self.pantalla.blit(s, (ANCHO//2 - s.get_width()//2, ALTO//2 - 70))
-
+        t = self.f_grande.render(titulo, True, col_t)
+        self.pantalla.blit(t, (ANCHO // 2 - t.get_width() // 2, ALTO // 2 - 145))
+        s = self.f_norm.render(sub, True, TEXTO)
+        self.pantalla.blit(s, (ANCHO // 2 - s.get_width() // 2, ALTO // 2 - 70))
         self._boton(self._r_btn_reiniciar(), 'JUGAR DE NUEVO', self.f_med)
 
-    # ────────────────────────────────────
-    #  DIBUJO DEL TABLERO
-    # ────────────────────────────────────
-    def _dibujar_tablero(self, tablero, ox, oy, mostrar_barcos):
-        """
-        Dibuja un tablero en la posición (ox, oy) de la pantalla.
-
-        Parámetros:
-            tablero        : Objeto Tablero a dibujar
-            ox, oy         : Posición de origen en píxeles
-            mostrar_barcos : Si False, oculta los barcos (tablero enemigo)
-        """
-        for f in range(FILAS):
-            for c in range(COLS):
-                px, py = self._celda_a_pixel(f, c, (ox, oy))
-                estado = tablero.celdas[f][c]
-
-                # Elegimos el color según el estado de la celda
-                if estado == 'agua':
-                    # Efecto de onda suave en el agua
-                    onda = int(8 * math.sin(self.ticks * 0.04 + f * 0.5 + c * 0.3))
-                    color = (AGUA[0], AGUA[1] + onda, min(255, AGUA[2] + onda))
-                elif estado == 'barco':
-                    color = BARCO_OK if mostrar_barcos else AGUA
-                elif estado == 'impacto':
-                    color = IMPACTO
-                elif estado == 'fallo':
-                    color = FALLO_C
-                else:
-                    color = AGUA
-
-                # Rectángulo de la celda con bordes redondeados
-                rect = pygame.Rect(px + 1, py + 1, CELDA - 2, CELDA - 2)
-                pygame.draw.rect(self.pantalla, color, rect, border_radius=4)
-
-                # Símbolo dentro de la celda
-                if estado == 'impacto':
-                    txt = self.f_celda.render('X', True, BLANCO)
-                    self.pantalla.blit(txt, (px + CELDA//2 - txt.get_width()//2,
-                                            py + CELDA//2 - txt.get_height()//2))
-                elif estado == 'fallo':
-                    pygame.draw.circle(self.pantalla, (150, 180, 220),
-                                       (px + CELDA//2, py + CELDA//2), 4)
-
-                # Borde de la celda
-                pygame.draw.rect(self.pantalla, BORDE, rect, 1, border_radius=4)
-
+    # ── UTILIDADES DE DIBUJO ──
     def _dibujar_etiquetas(self, ox, oy):
-        """Dibuja letras A-J (columnas) y números 1-10 (filas) del tablero."""
-        letras = 'ABCDEFGHIJ'
-        for i, l in enumerate(letras):
+        for i, l in enumerate('ABCDEFGHIJ'):
             t = self.f_celda.render(l, True, GRIS)
-            self.pantalla.blit(t, (ox + i * CELDA + CELDA//2 - t.get_width()//2, oy - 20))
+            self.pantalla.blit(t, (ox + i * CELDA + CELDA // 2 - t.get_width() // 2, oy - 20))
         for i in range(FILAS):
             t = self.f_celda.render(str(i + 1), True, GRIS)
-            self.pantalla.blit(t, (ox - 24, oy + i * CELDA + CELDA//2 - t.get_height()//2))
+            self.pantalla.blit(t, (ox - 24, oy + i * CELDA + CELDA // 2 - t.get_height() // 2))
 
     def _dibujar_msg(self):
-        """Dibuja el mensaje de estado en la parte inferior de la pantalla."""
         if self.mensaje:
             t = self.f_norm.render(self.mensaje, True, self.msg_color)
-            self.pantalla.blit(t, (ANCHO//2 - t.get_width()//2, ALTO - 36))
+            self.pantalla.blit(t, (ANCHO // 2 - t.get_width() // 2, ALTO - 36))
 
     def _boton(self, rect, texto, fuente):
-        """
-        Dibuja un botón con efecto hover (cambia de color al pasar el mouse).
-        """
-        pos_m = pygame.mouse.get_pos()
-        hover = rect.collidepoint(pos_m)
-        col   = BTN_H if hover else BTN
-
-        # Cuerpo del botón
+        hover = rect.collidepoint(pygame.mouse.get_pos())
+        col = BTN_H if hover else BTN
         pygame.draw.rect(self.pantalla, col, rect, border_radius=12)
-        # Borde
         pygame.draw.rect(self.pantalla, BORDE_H if hover else BORDE, rect, 2, border_radius=12)
-        # Texto centrado
         t = fuente.render(texto, True, BTN_T)
-        self.pantalla.blit(t, (rect.centerx - t.get_width()//2,
-                               rect.centery - t.get_height()//2))
+        self.pantalla.blit(t, (rect.centerx - t.get_width() // 2,
+                               rect.centery - t.get_height() // 2))
 
-    # ────────────────────────────────────
-    #  UTILIDADES
-    # ────────────────────────────────────
-    def _celda_a_pixel(self, fila, col, origen):
-        """
-        Convierte índices de celda (fila, col) a coordenadas de píxel.
-
-        Ejemplo: celda (0, 0) con origen (50, 160) → píxel (50, 160)
-        """
-        ox, oy = origen
-        return (ox + col * CELDA, oy + fila * CELDA)
+    # ── CONVERSIONES DE COORDENADAS ──
+    def _celda_a_pixel(self, f, c, origen):
+        return (origen[0] + c * CELDA, origen[1] + f * CELDA)
 
     def _pixel_a_celda(self, pos, origen):
-        """
-        Convierte coordenadas de píxel a índices de celda (fila, col).
-        Retorna None si el píxel está fuera del tablero.
-        """
-        ox, oy = origen
-        px, py = pos
-        c = (px - ox) // CELDA
-        f = (py - oy) // CELDA
+        c = (pos[0] - origen[0]) // CELDA
+        f = (pos[1] - origen[1]) // CELDA
         if 0 <= f < FILAS and 0 <= c < COLS:
             return (f, c)
         return None
 
-    def _emit_particulas(self, x, y, color, cantidad):
-        """Crea partículas de efecto visual en la posición (x, y)."""
-        for _ in range(cantidad):
-            self.particulas.append(Particula(x, y, color))
+    def _emit(self, x, y, color, n, tipo='normal'):
+        for _ in range(n):
+            self.particulas.append(Particula(x, y, color, tipo))
 
-    def _mensaje(self, texto, color=TEXTO):
-        """Establece el mensaje de estado que se muestra en la parte inferior."""
+    def _msg(self, texto, color=TEXTO):
         self.mensaje   = texto
         self.msg_color = color
 
-    # ────────────────────────────────────
-    #  RECTÁNGULOS DE LOS BOTONES
-    #  Definidos como métodos para reutilizarlos en
-    #  la detección de clicks y en el renderizado
-    # ────────────────────────────────────
+    # ── RECTÁNGULOS DE BOTONES ──
     def _r_btn_jugar(self):
-        return pygame.Rect(ANCHO//2 - 115, ALTO - 135, 230, 58)
-
+        return pygame.Rect(ANCHO // 2 - 115, ALTO - 135, 230, 58)
     def _r_btn_auto(self):
         return pygame.Rect(80, ALTO - 68, 145, 44)
-
     def _r_btn_reset(self):
         return pygame.Rect(242, ALTO - 68, 165, 44)
-
     def _r_btn_reiniciar(self):
-        return pygame.Rect(ANCHO//2 - 145, ALTO//2 + 55, 290, 58)
+        return pygame.Rect(ANCHO // 2 - 145, ALTO // 2 + 55, 290, 58)
 
 
 # ============================================================
-# PUNTO DE ENTRADA DEL PROGRAMA
+# PUNTO DE ENTRADA
 # ============================================================
 if __name__ == '__main__':
-    # Creamos el objeto del juego y arrancamos el bucle principal
     juego = BatallaNavalGUI()
     juego.ejecutar()
